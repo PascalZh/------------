@@ -10,7 +10,13 @@ public class FirstOrderModelSolver {
     private static int nMutation = Math.round(nPop * 1); // 变异个体数
     private static double[][] W;
     private static double[] D;
-    private static boolean fixNode = true; // 是否固定1和26节点为加氯点，这个节点为水源点
+    private static int numNodes = 36; // 节点总数
+    private static double pm = 1/numNodes; // 变异概率
+    private static boolean doFixNode = true; // 是否固定某几个节点为加氯点，这些点为水源点，具体哪个点需要自己找到这个变量的相关代码修改
+    private static int[] fixedNodes = {0, 25}; // 固定的节点
+    private static int NF = 2; // 固定加氯点个数
+    private static int NS = 3; // 最大加氯点个数（不包括固定加氯点）
+    private static int N_iter = 100; // 迭代次数
 
     public static void main(String[] args) {
         // 读取W.csv和D.csv文件
@@ -22,22 +28,23 @@ public class FirstOrderModelSolver {
             return;
         }
 
-        double[][] pop = new double[nPop][37];
+        double[][] pop = new double[nPop][numNodes+1];
 
         int optim_vars = 1;
         while (optim_vars <= nPop) {
-            pop[optim_vars - 1] = round(abs(rand(37), 0.4));
-            if (fixNode) {
-                pop[optim_vars - 1][0] = 1;
-                pop[optim_vars - 1][25] = 1;
+            pop[optim_vars - 1] = threshold(rand(numNodes+1), NS / (double) numNodes);
+            if (doFixNode) {
+                for (int i = 0; i < NF; i++) {
+                    pop[optim_vars - 1][fixedNodes[i]] = 1;
+                }
             }
             if (isValid(pop[optim_vars - 1])) {
                 optim_vars++;
             }
         }
 
-        for (optim_vars = 1; optim_vars <= 100; optim_vars++) {
-            double[][] popm = new double[nMutation][37];
+        for (optim_vars = 1; optim_vars <= N_iter; optim_vars++) {
+            double[][] popm = new double[nMutation][numNodes+1];
             for (int j = 0; j < nMutation; j++) {
                 while (true) {
                     double[] m = binaryMutate(pop[j]);
@@ -48,11 +55,11 @@ public class FirstOrderModelSolver {
                 }
             }
 
-            double[][] popc = new double[nCrossOver][37];
+            double[][] popc = new double[nCrossOver][numNodes+1];
             for (int j = 0; j < nCrossOver; j++) {
                 while (true) {
-                    int p1 = (int) Math.round(rand(1)[0] * 35);
-                    int p2 = (int) Math.round(rand(1)[0] * 35);
+                    int p1 = (int) Math.round(rand(1)[0] * (numNodes-1));
+                    int p2 = (int) Math.round(rand(1)[0] * (numNodes-1));
                     double[][] c = simpleXover(pop[p1], pop[p2]);
                     double[] c1 = c[0];
                     double[] c2 = c[1];
@@ -72,24 +79,13 @@ public class FirstOrderModelSolver {
         }
 
         // 展示结果
-        double[] pop_lw = new double[37];
-        pop_lw[6] = 1;
-        pop_lw[21] = 1;
-        pop_lw[34] = 1;
-        if (fixNode) {
-            pop_lw[0] = 1;
-            pop_lw[25] = 1;
-        }
-        double[] pop_lw_fit = calculateFit(new double[][] { pop_lw })[0];
-        double fitness_lw = pop_lw_fit[pop_lw_fit.length - 1];
-
         // find max fitness in the pop
-        int[] maxidx = find(pop, max(pop, 37-1));
+        int[] maxidx = find(pop, max(pop, numNodes));
         // print results
         System.out.println("最优解：");
         System.out.println("最优解的适应度值：" + pop[maxidx[0]][pop[maxidx[0]].length - 1]);
         System.out.println("最优解的加氯点：");
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < numNodes; i++) {
             if (pop[maxidx[0]][i] == 1) {
                 System.out.print((i + 1) + " ");
             }
@@ -128,18 +124,10 @@ public class FirstOrderModelSolver {
         return r;
     }
 
-    private static double[] abs(double[] arr, double threshold) {
+    private static double[] threshold(double[] arr, double thres) {
         double[] r = new double[arr.length];
         for (int i = 0; i < arr.length; i++) {
-            r[i] = Math.abs(arr[i]) > threshold ? arr[i] : 0;
-        }
-        return r;
-    }
-
-    private static double[] round(double[] arr) {
-        double[] r = new double[arr.length];
-        for (int i = 0; i < arr.length; i++) {
-            r[i] = Math.round(arr[i]);
+            r[i] = arr[i] < thres ? 1. : 0.;
         }
         return r;
     }
@@ -147,7 +135,6 @@ public class FirstOrderModelSolver {
     public static double[] binaryMutate(double[] parent) {
         // Basic bit mutation changes each bit in the parent individual based on the
         // mutation probability
-        double pm = 0.02777;
         int numVar = parent.length - 1; // Get the number of variables
         // Randomly select a number between 1 and the number of variables to perform
         // mutation on that bit
@@ -161,9 +148,10 @@ public class FirstOrderModelSolver {
         }
         mutatedParent[numVar] = parent[numVar];
 
-        if (fixNode) {
-            mutatedParent[0] = 1;
-            mutatedParent[25] = 1;
+        if (doFixNode) {
+            for (int i = 0; i < NF; i++) {
+                mutatedParent[fixedNodes[i]] = 1;
+            }
         }
         return mutatedParent;
     }
@@ -190,11 +178,11 @@ public class FirstOrderModelSolver {
         c1[numVar] = p1[numVar];
         c2[numVar] = p2[numVar];
 
-        if (fixNode) {
-            c1[0] = 1;
-            c1[25] = 1;
-            c2[0] = 1;
-            c2[25] = 1;
+        if (doFixNode) {
+            for (int i = 0; i < NF; i++) {
+                c1[fixedNodes[i]] = 1;
+                c2[fixedNodes[i]] = 1;
+            }
         }
 
         return new double[][] { c1, c2 };
@@ -205,7 +193,7 @@ public class FirstOrderModelSolver {
         for (int i = 0; i < x.length - 1; i++) {
             sum += x[i];
         }
-        return fixNode ? sum <= 5 : sum <= 3;
+        return doFixNode ? sum <= NS+NF : sum <= NS;
     }
 
     public static double[][] calculateFit(double[][] pop) {

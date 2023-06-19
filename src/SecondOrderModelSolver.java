@@ -11,8 +11,14 @@ import java.util.Collection;
 public class SecondOrderModelSolver {
 
     public static void main(String[] args) {
+        // 参数
+        double c_min = 0.2;
+        double c_max = 4;
+        int numNodes = 36;
+        int[] fixedNodes = {0, 25};  // 0-based
+
         // read a matrix A from a csv file
-        double[][] A = new double[36][];
+        double[][] A = new double[numNodes][];
         int N_vars = 0;
         try {
             BufferedReader reader = new BufferedReader(new FileReader("A.csv"));
@@ -36,7 +42,7 @@ public class SecondOrderModelSolver {
 
         // print A, N_vars
         System.out.println("A:");
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < numNodes; i++) {
             for (int j = 0; j < N_vars; j++) {
                 // format float with .3f
                 System.out.printf("%.3f ", A[i][j]);
@@ -53,13 +59,17 @@ public class SecondOrderModelSolver {
         LinearObjectiveFunction f = new LinearObjectiveFunction(coeff_obj, 0);
 
         // create constraints: c_min <= A*x <= c_max, where A is loaded from csv file
-        double c_min = 0.2;
-        double c_max = 4;
         Collection<LinearConstraint> constraints = new ArrayList<>();
-        for (int i = 0; i < 36; i++) {
-            if (i == 0 || i == 25) {
+        for (int i = 0; i < numNodes; i++) {
+            boolean isFixed = false;
+            for (int j = 0; j < fixedNodes.length; j++) {
+                if (i == fixedNodes[j]) {
+                    isFixed = true;
+                    break;
+                }
+            }
+            if (isFixed) {
                 constraints.add(new LinearConstraint(A[i], Relationship.GEQ, c_min));
-                constraints.add(new LinearConstraint(A[i], Relationship.LEQ, c_max));
                 continue;
             }
             constraints.add(new LinearConstraint(A[i], Relationship.GEQ, c_min));
